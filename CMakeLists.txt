@@ -11,4 +11,3 @@ add_executable(ELF main.c
         elf/elf64.h
         elf/internal.h
         elf/elf.c)
-

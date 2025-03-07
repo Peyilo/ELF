@@ -340,8 +340,7 @@ typedef uint32_t bfd_vma;
 #define R_ARM_ALU_SBREL_27_20_CK 37 // Deprecated ARM S + A - B(S)
 #define R_ARM_TARGET1           38   // Data Misc (S + A) | T
 
-#define ELF32_R_SYM(info)   ((info) >> 8)
-#define ELF32_R_TYPE(info)   ((info) & 0xff)
+
 
 
 #endif //ELF_INTERNAL_H

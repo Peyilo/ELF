@@ -90,6 +90,21 @@ typedef struct {
     Elf32_Sword     r_addend;
 } Elf32_Rela;
 
+typedef struct {
+    Elf32_Half vn_version;  /* 版本结构版本号，通常为 1 */
+    Elf32_Half vn_cnt;      /* 依赖库的数量 */
+    Elf32_Word vn_file;     /* 指向 `DT_STRTAB` 中的库名称（偏移量） */
+    Elf32_Word vn_aux;      /* 指向第一个 `Elf32_Vernaux` 结构的偏移 */
+    Elf32_Word vn_next;     /* 指向下一个 `Elf32_Verneed` 结构的偏移（0 表示结束） */
+} Elf32_Verneed;
+
+typedef struct {
+    Elf32_Word vna_hash;    /* 版本名称的哈希值（用于快速查找） */
+    Elf32_Half vna_flags;   /* 版本标志（通常为 0） */
+    Elf32_Half vna_other;   /* `.gnu.version` 表中的版本索引 */
+    Elf32_Word vna_name;    /* 指向 `DT_STRTAB` 中的版本名称（偏移量） */
+    Elf32_Word vna_next;    /* 指向下一个 `Elf32_Vernaux` 结构的偏移（0 表示结束） */
+} Elf32_Vernaux;
 
 void parse_elf32_header(Elf32_Ehdr *ehdr, FILE *file);
 void parse_elf32_section_header(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file);
@@ -109,5 +124,7 @@ Elf32_Phdr *find_phdr_by_type(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Word p
 
 Elf32_Phdr *get_dynamic_phdr(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[]);
 
+#define ELF32_R_SYM(info)   ((info) >> 8)
+#define ELF32_R_TYPE(info)   ((info) & 0xff)
 
 #endif //ELF_ELF32_H

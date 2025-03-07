@@ -486,7 +486,7 @@ void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *f
     }
     char dynamic_str[strsz / sizeof(char)];
     if (strsz != 0) {
-        fseek(file, strtab, SEEK_SET);
+        fseek(file, (long )strtab, SEEK_SET);
         if (fread(dynamic_str, strsz, 1, file) != 1) {
             perror("Failed to read Dynamic STRTAB");
             exit(-1);
@@ -681,13 +681,41 @@ void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr
     printf("Relocation section '.rel.dyn' at offset 0x%x contains %zu entries:\n", rel_shdr->sh_offset, size);
     printf(" Offset     Info    Type            Sym.Value  Sym. Name\n");
 
-    // TODO: Sym信息有问题
     Elf32_Shdr *dynstr_shdr = find_shdr_by_name(ehdr, shdrs, ".dynstr", file);
     char strtab[dynstr_shdr->sh_size / sizeof(char )];
     fseek(file, (long )dynstr_shdr->sh_offset, SEEK_SET);
     if (fread(strtab, dynstr_shdr->sh_size, 1, file) != 1) {
         perror("Failed to read .dynstr section");
         exit(-1);
+    }
+
+    Elf32_Shdr *dynsym_shdr = find_shdr_by_name(ehdr, shdrs, ".dynsym", file);
+    Elf32_Sym dynsyms[dynsym_shdr->sh_size / sizeof(Elf32_Sym)];
+    fseek(file, (long )dynsym_shdr->sh_offset, SEEK_SET);
+    if (fread(dynsyms, dynsym_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .dynsym section");
+        exit(-1);
+    }
+
+    Elf32_Shdr *gnu_version_shdr = find_shdr_by_name(ehdr, shdrs, ".gnu.version", file);
+    uint16_t version[gnu_version_shdr->sh_size / sizeof(uint16_t)];
+    fseek(file, (long )gnu_version_shdr->sh_offset, SEEK_SET);
+    if (fread(version, gnu_version_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .gnu.version section");
+        exit(-1);
+    }
+
+    Elf32_Shdr *gnu_version_r_shdr = find_shdr_by_name(ehdr, shdrs, ".gnu.version_r", file);
+    Elf32_Addr offset = 0;
+    int num_verneeds = (int )(gnu_version_r_shdr->sh_size / sizeof(Elf32_Verneed));
+    Elf32_Verneed verneeds[num_verneeds];
+    for (int i = 0; i < num_verneeds; i++) {
+        fseek(file, gnu_version_r_shdr->sh_offset + offset, SEEK_SET);
+        if (fread(verneeds + i, sizeof(Elf32_Verneed), 1, file) != 1) {
+            perror("Failed to read .gnu.version_r section");
+            exit(-1);
+        }
+        offset += verneeds[i].vn_next;
     }
 
     // 遍历每个重定位条目
@@ -697,8 +725,12 @@ void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr
         // 获取符号索引和重定位类型
         unsigned int symbol_index = ELF32_R_SYM(rel_entry->r_info);
         unsigned int relocation_type = ELF32_R_TYPE(rel_entry->r_info);
-
-        printf("%08x  %08x %s %s\n", rel_entry->r_offset, rel_entry->r_info, get_relocation_type(relocation_type), strtab + symbol_index);
-
+        Elf32_Sym *sym = dynsyms + symbol_index;
+        if (symbol_index == 0) {
+            printf("%08x  %08x %s\n", rel_entry->r_offset, rel_entry->r_info, get_relocation_type(relocation_type));
+        } else {
+            printf("%08x  %08x %s %08x %s@%s\n", rel_entry->r_offset, rel_entry->r_info,
+                   get_relocation_type(relocation_type), sym->st_value, strtab + sym->st_name, strtab + verneeds[version[symbol_index]].vn_file);
+        }
     }
 }
