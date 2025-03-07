@@ -117,7 +117,8 @@ void print_elf32_section_headers(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *fil
 void print_elf32_program_headers(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], FILE *file);
 void print_elf32_seg2sec_mapping(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Shdr shdrs[], FILE *file);
 void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *file);
-void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file);
+void print_elf32_all_rel_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file);
+void print_elf32_all_symbol_table(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file);
 
 Elf32_Shdr *find_shdr_by_name(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], const char *name, FILE *file);
 Elf32_Phdr *find_phdr_by_type(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Word p_type);
@@ -126,5 +127,10 @@ Elf32_Phdr *get_dynamic_phdr(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[]);
 
 #define ELF32_R_SYM(info)   ((info) >> 8)
 #define ELF32_R_TYPE(info)   ((info) & 0xff)
+
+#define ELF32_ST_TYPE(info)   ((info) & 0xf)
+#define ELF32_ST_BIND(info)   ((info) >> 4)
+#define ELF32_ST_VISIBILITY(other) ((other) & 0x3)
+
 
 #endif //ELF_ELF32_H

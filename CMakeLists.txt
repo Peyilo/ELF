@@ -3,7 +3,7 @@ project(ELF C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(ELF main.c
+add_executable(readelf main.c
         elf/elf.h
         elf/elf32.c
         elf/elf32.h

@@ -676,9 +676,124 @@ char *get_relocation_type(unsigned int relocation_type) {
 }
 
 
-void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file) {
+void parse_elf32_symbol_table(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *dynsym_shdr, Elf32_Sym dynsyms[], FILE *file) {
+    fseek(file, (long )dynsym_shdr->sh_offset, SEEK_SET);
+    if (fread(dynsyms, dynsym_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .dynsym section");
+        exit(-1);
+    }
+}
+
+void print_elf32_all_symbol_table(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file) {
+    Elf32_Shdr *shstrtab = &shdrs[ehdr->e_shstrndx];
+    char shstrtab_data[shstrtab->sh_size / sizeof(char)];
+    read_shstrtab(shstrtab, shstrtab_data, file);           // 需要获取section的name
+
+    Elf32_Shdr *dynstr_shdr = find_shdr_by_name(ehdr, shdrs, ".dynstr", file);
+    char strtab[dynstr_shdr->sh_size / sizeof(char )];
+    fseek(file, (long )dynstr_shdr->sh_offset, SEEK_SET);
+    if (fread(strtab, dynstr_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .dynstr section");
+        exit(-1);
+    }
+
+    Elf32_Shdr *gnu_version_shdr = find_shdr_by_name(ehdr, shdrs, ".gnu.version", file);
+    uint16_t version[gnu_version_shdr->sh_size / sizeof(uint16_t)];
+    fseek(file, (long )gnu_version_shdr->sh_offset, SEEK_SET);
+    if (fread(version, gnu_version_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .gnu.version section");
+        exit(-1);
+    }
+
+    Elf32_Shdr *gnu_version_r_shdr = find_shdr_by_name(ehdr, shdrs, ".gnu.version_r", file);
+    Elf32_Addr offset = 0;
+    int num_ver = (int )(gnu_version_r_shdr->sh_size / (sizeof(Elf32_Verneed) + sizeof(Elf32_Vernaux)));
+    Elf32_Verneed verneeds[num_ver];
+    Elf32_Vernaux vernauxs[num_ver];
+    for (int i = 0; i < num_ver; i++) {
+        fseek(file, gnu_version_r_shdr->sh_offset + offset, SEEK_SET);
+        if (fread(verneeds + i, sizeof(Elf32_Verneed), 1, file) != 1) {
+            perror("Failed to read .gnu.version_r verneed");
+            exit(-1);
+        }
+        fseek(file, gnu_version_r_shdr->sh_offset + verneeds[i].vn_aux + offset, SEEK_SET);
+        if (fread(vernauxs + i, sizeof(Elf32_Vernaux), 1, file) != 1) {
+            perror("Failed to read .gnu.version_r vernauxs");
+            exit(-1);
+        }
+        offset += verneeds[i].vn_next;
+    }
+
+    for (int i = 0; i < ehdr->e_shnum; i++) {
+        Elf32_Shdr *shdr = shdrs + i;
+        if (shdr->sh_type == SHT_DYNSYM) {
+            size_t size = shdr->sh_size / sizeof(Elf32_Sym);        // the number of symbol
+            char *name = shstrtab_data + shdr->sh_name;             // the section name
+            Elf32_Sym dynsyms[size];
+            parse_elf32_symbol_table(ehdr, shdrs, shdr, dynsyms, file);
+            printf("Symbol table '%s' contains %zu entries:\n", name, size);
+            printf("   Num:    Value  Size Type    Bind   Vis      Ndx Name\n");
+
+            fseek(file, (long )shdr->sh_offset, SEEK_SET);      // read symbols from the file with offset
+            if (fread(dynsyms, shdr->sh_size, 1, file) != 1) {
+                fprintf(stderr, "Failed to read %s section", name);
+                exit(-1);
+            }
+            for (int j = 0; j < size; j++) {
+                Elf32_Sym *sym = dynsyms + j;
+                printf("%6d: %08x %5d ", j, sym->st_value, sym->st_size);
+                switch (ELF32_ST_TYPE(sym->st_info)) {
+                    case STT_NOTYPE:  printf("NOTYPE "); break;
+                    case STT_OBJECT:  printf("OBJECT "); break;
+                    case STT_FUNC:    printf("FUNC   "); break;
+                    case STT_SECTION: printf("SECTION"); break;
+                    case STT_FILE:    printf("FILE   "); break;
+                    default:          printf("UNKNOWN"); break;
+                }
+                // 输出符号绑定类型
+                switch (ELF32_ST_BIND(sym->st_info)) {
+                    case STB_LOCAL:  printf(" LOCAL  "); break;
+                    case STB_GLOBAL: printf(" GLOBAL "); break;
+                    case STB_WEAK:   printf(" WEAK   "); break;
+                    default:         printf(" UNKNOWN"); break;
+                }
+
+                // 输出可见性
+                switch (ELF32_ST_VISIBILITY(sym->st_other)) {
+                    case STV_DEFAULT: printf(  "DEFAULT  "); break;
+                    case STV_INTERNAL: printf( "INTERNAL "); break;
+                    case STV_HIDDEN:   printf( "HIDDEN   "); break;
+                    case STV_PROTECTED: printf("PROTECTED"); break;
+                    default: printf(           "UNKNOWN "); break;
+                }
+
+                // 输出符号节索引
+                if (sym->st_shndx == SHN_UNDEF) {
+                    printf("UND ");
+                } else if (sym->st_shndx == SHN_ABS) {
+                    printf("ABS ");
+                } else if (sym->st_shndx == SHN_COMMON) {
+                    printf("COMMON ");
+                } else {
+                    printf("%3d ", sym->st_shndx);
+                }
+                int v = version[j];
+                if (v < 2) {
+                    printf("%s\n", strtab + sym->st_name);
+                } else {
+                    printf("%s@%s (%d)\n", strtab + sym->st_name, strtab + vernauxs[version[j] - 2].vna_name, v);
+                }
+
+            }
+            printf("\n");
+        }
+    }
+}
+
+
+void print_elf32_rel_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *rel_shdr, const char *shdr_name, Elf32_Rel rels[], FILE *file) {
     size_t size = rel_shdr->sh_size / sizeof(Elf32_Rel);
-    printf("Relocation section '.rel.dyn' at offset 0x%x contains %zu entries:\n", rel_shdr->sh_offset, size);
+    printf("Relocation section '%s' at offset 0x%x contains %zu entries:\n", shdr_name, rel_shdr->sh_offset, size);
     printf(" Offset     Info    Type            Sym.Value  Sym. Name\n");
 
     Elf32_Shdr *dynstr_shdr = find_shdr_by_name(ehdr, shdrs, ".dynstr", file);
@@ -707,12 +822,18 @@ void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr
 
     Elf32_Shdr *gnu_version_r_shdr = find_shdr_by_name(ehdr, shdrs, ".gnu.version_r", file);
     Elf32_Addr offset = 0;
-    int num_verneeds = (int )(gnu_version_r_shdr->sh_size / sizeof(Elf32_Verneed));
-    Elf32_Verneed verneeds[num_verneeds];
-    for (int i = 0; i < num_verneeds; i++) {
+    int num_ver = (int )(gnu_version_r_shdr->sh_size / (sizeof(Elf32_Verneed) + sizeof(Elf32_Vernaux)));
+    Elf32_Verneed verneeds[num_ver];
+    Elf32_Vernaux vernauxs[num_ver];
+    for (int i = 0; i < num_ver; i++) {
         fseek(file, gnu_version_r_shdr->sh_offset + offset, SEEK_SET);
         if (fread(verneeds + i, sizeof(Elf32_Verneed), 1, file) != 1) {
-            perror("Failed to read .gnu.version_r section");
+            perror("Failed to read .gnu.version_r verneed");
+            exit(-1);
+        }
+        fseek(file, gnu_version_r_shdr->sh_offset + verneeds[i].vn_aux + offset, SEEK_SET);
+        if (fread(vernauxs + i, sizeof(Elf32_Vernaux), 1, file) != 1) {
+            perror("Failed to read .gnu.version_r vernauxs");
             exit(-1);
         }
         offset += verneeds[i].vn_next;
@@ -729,8 +850,31 @@ void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr
         if (symbol_index == 0) {
             printf("%08x  %08x %s\n", rel_entry->r_offset, rel_entry->r_info, get_relocation_type(relocation_type));
         } else {
-            printf("%08x  %08x %s %08x %s@%s\n", rel_entry->r_offset, rel_entry->r_info,
-                   get_relocation_type(relocation_type), sym->st_value, strtab + sym->st_name, strtab + verneeds[version[symbol_index]].vn_file);
+            int v = version[symbol_index];      // 获取Symbol的版本号,  0: local, 1: global两个是固定的
+            if (v < 2) {
+                printf("%08x  %08x %s  %08x %s\n", rel_entry->r_offset, rel_entry->r_info,
+                       get_relocation_type(relocation_type), sym->st_value, strtab + sym->st_name);
+            } else {
+                printf("%08x  %08x %s  %08x %s@%s\n", rel_entry->r_offset, rel_entry->r_info,
+                       get_relocation_type(relocation_type), sym->st_value, strtab + sym->st_name,
+                       strtab + vernauxs[version[symbol_index] - 2].vna_name);
+            }
+
+        }
+    }
+    printf("\n");
+}
+
+void print_elf32_all_rel_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file) {
+    Elf32_Shdr *shstrtab = &shdrs[ehdr->e_shstrndx];
+    char shstrtab_data[shstrtab->sh_size / sizeof(char)];
+    read_shstrtab(shstrtab, shstrtab_data, file);           // 需要获取section的name
+    for (int i = 0; i < ehdr->e_shnum; i++) {
+        Elf32_Shdr *shdr = shdrs + i;
+        if (shdr->sh_type == SHT_REL) {     // 处理全部SHT_REL类型的section
+            Elf32_Rel rels[shdr->sh_size / sizeof(Elf32_Rel)];
+            parse_elf32_rel(shdr, rels, file);
+            print_elf32_rel_section(ehdr, shdrs, shdr, shstrtab_data + shdr->sh_name, rels, file);
         }
     }
 }

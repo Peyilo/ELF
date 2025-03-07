@@ -341,6 +341,26 @@ typedef uint32_t bfd_vma;
 #define R_ARM_TARGET1           38   // Data Misc (S + A) | T
 
 
+#define STT_NOTYPE   0    // 未指定类型
+#define STT_OBJECT   1    // 数据对象 (变量、数组等)
+#define STT_FUNC     2    // 函数
+#define STT_SECTION  3    // 节类型
+#define STT_FILE     4    // 文件符号
+#define STT_COMMON   5    // 公共数据对象
+#define STT_TLS      6    // 线程局部存储对象
+
+#define STB_LOCAL    0    // 本地符号
+#define STB_GLOBAL   1    // 全局符号
+#define STB_WEAK     2    // 弱符号
+
+#define STV_DEFAULT   0    // 默认可见性
+#define STV_INTERNAL  1    // 内部可见性
+#define STV_HIDDEN    2    // 隐藏符号
+#define STV_PROTECTED 3    // 受保护符号
+
+#define SHN_UNDEF    0      // 未定义符号
+#define SHN_ABS      0xFFF1 // 绝对值符号
+#define SHN_COMMON   0xFFF2 // 公共符号
 
 
 #endif //ELF_INTERNAL_H

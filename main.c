@@ -2,13 +2,20 @@
 #include <stdlib.h>
 #include "elf/elf.h"
 
+#define DEVICE 2
+#if DEVICE == 1
+    #define SO_FILE(x) "D:\\Code\\Clion\\ELF\\input\\" x
+#elif DEVICE == 2
+    #define SO_FILE(x) "F:\\Code\\Clion\\ELF\\input\\" x
+#endif
+
 int main() {
     char *elf_list[5] = {
-            "D:\\Code\\Clion\\ELF\\input\\libsfdata.so",
-            "D:\\Code\\Clion\\ELF\\input\\libDexHelper.so",
-            "D:\\Code\\Clion\\ELF\\input\\libDexHelper-x86.so",
-            "D:\\Code\\Clion\\ELF\\input\\memdumper32",
-            "D:\\Code\\Clion\\ELF\\input\\memdumper64"
+            SO_FILE("libsfdata.so"),
+            SO_FILE("libDexHelper.so"),
+            SO_FILE("libDexHelper-x86.so"),
+            SO_FILE("memdumper32"),
+            SO_FILE("memdumper64")
     };
     const char *file_path = elf_list[3];
     FILE *file = fopen(file_path, "rb");
@@ -40,11 +47,8 @@ int main() {
         parse_elf32_dynamic(dyn_phdr, dyns, file);
         print_elf32_dynamic_segment(dyn_phdr, dyns, file);
 
-        Elf32_Shdr *reldyn_shdr = find_shdr_by_name(&ehdr, shdrs, ".rel.dyn", file);
-        Elf32_Rel rels[reldyn_shdr->sh_size / sizeof(Elf32_Rel)];
-        parse_elf32_rel(reldyn_shdr, rels, file);
-        print_elf32_reldyn_section(&ehdr, shdrs, reldyn_shdr, rels, file);
-
+        print_elf32_all_rel_section(&ehdr, shdrs, file);
+        print_elf32_all_symbol_table(&ehdr, shdrs, file);
     }
     fclose(file);
     return EXIT_SUCCESS;
