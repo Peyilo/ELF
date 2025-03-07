@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "elf_constants.h"
+#include "internal.h"
 
 typedef uint32_t Elf32_Addr;
 typedef uint16_t Elf32_Half;

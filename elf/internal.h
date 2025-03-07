@@ -2,8 +2,8 @@
 // Created by Peyilo on 2025/3/3.
 //
 
-#ifndef ELF_ELF_CONSTANTS_H
-#define ELF_ELF_CONSTANTS_H
+#ifndef ELF_INTERNAL_H
+#define ELF_INTERNAL_H
 
 // e_ident索引
 #define EI_MAG0         0
@@ -172,5 +172,131 @@
 #define DT_VERNEED       0x6ffffffe /* 版本需求表 */
 #define DT_VERNEEDNUM    0x6fffffff /* 版本需求条 */
 #define DT_VERSYM        0x6ffffff0
+#define DT_GNU_HASH      0x6ffffef5
 
-#endif //ELF_ELF_CONSTANTS_H
+// DT_FLAGS
+#define DF_ORIGIN       0x00000001  // 允许 `$ORIGIN`
+#define DF_SYMBOLIC     0x00000002  // 先查找自身的符号
+#define DF_TEXTREL      0x00000004  // 允许对 `.text` 段进行写操作
+#define DF_BIND_NOW     0x00000008  // 强制立即解析所有符号
+#define DF_STATIC_TLS   0x00000010  // 共享库需要静态 TLS 分配
+
+// DT_FLAGS_1
+#define DF_1_NOW        0x00000001  // 立即绑定所有符号（类似 `DF_BIND_NOW`）
+#define DF_1_GLOBAL     0x00000002  // 使该共享库的符号全局可见
+#define DF_1_GROUP      0x00000004  // 共享库属于一个符号解析组
+#define DF_1_NODELETE   0x00000008  // 共享库不会被 `dlclose()` 卸载
+#define DF_1_LOADFLTR   0x00000010  // 立即加载所有 `DT_FILTER`
+#define DF_1_INITFIRST  0x00000020  // 该共享库的 `init` 代码优先执行
+#define DF_1_NOOPEN     0x00000040  // 不能被 `dlopen()` 动态加载
+#define DF_1_ORIGIN     0x00000080  // 允许 `$ORIGIN` 变量
+#define DF_1_DIRECT     0x00000100  // 直接绑定符号，避免符号查找
+#define DF_1_TRANS      0x00000200  // 透明对象（通常用于 RTLD_GLOBAL）
+#define DF_1_INTERPOSE  0x00000400  // 该库的符号会替换之前加载的符号
+#define DF_1_NODEFLIB   0x00000800  // 禁止默认库搜索路径
+#define DF_1_NODUMP     0x00001000  // 该库不会被 `ldd` 或 `gdb` dump
+#define DF_1_CONFALT    0x00002000  // 允许 `DT_CONFIG` 指定备用路径
+#define DF_1_ENDFILTEE  0x00004000  // 该库是 `DT_FILTER` 的终点
+#define DF_1_DISPRELDNE 0x00008000  // 推迟 `DT_REL` 处理
+#define DF_1_DISPRELPND 0x00010000  // 提前 `DT_REL` 处理
+#define DF_1_NODIRECT   0x00020000  // 禁止 `DT_DIRECT`
+#define DF_1_IGNMULDEF  0x00040000  // 忽略多次定义的符号
+#define DF_1_NOKSYMS    0x00080000  // 该库没有 `.dynsym` 符号表
+#define DF_1_NOHDR      0x00100000  // 禁止加载 ELF 头
+#define DF_1_EDITED     0x00200000  // 该库已被修改（可能是热修复）
+#define DF_1_NORELOC    0x00400000  // 禁止 `.rel` 和 `.rela` 解析
+#define DF_1_SYMINTPOSE 0x00800000  // 该库的符号会插入全局符号表
+#define DF_1_GLOBAUDIT  0x01000000  // 该库会影响 `audit` 机制
+#define DF_1_SINGLETON  0x02000000  // 该库在整个进程中唯一
+#define DF_1_PIE        0x08000000
+
+
+/* Mbind segments */
+#define PT_GNU_MBIND_NUM 4096
+#define PT_GNU_MBIND_LO (PT_LOOS + 0x474e555)
+#define PT_GNU_MBIND_HI (PT_GNU_MBIND_LO + PT_GNU_MBIND_NUM - 1)
+#define PT_GNU_SFRAME	(PT_LOOS + 0x474e554) /* SFrame stack trace information */
+
+#include <stdint.h>
+typedef uint32_t bfd_vma;
+
+/* .tbss is special.  It doesn't contribute memory space to normal
+   segments and it doesn't take file space in normal segments.  */
+#define ELF_TBSS_SPECIAL(sec_hdr, segment)			\
+  (((sec_hdr)->sh_flags & SHF_TLS) != 0				\
+   && (sec_hdr)->sh_type == SHT_NOBITS				\
+   && (segment)->p_type != PT_TLS)
+
+#define ELF_SECTION_SIZE(sec_hdr, segment)			\
+  (ELF_TBSS_SPECIAL(sec_hdr, segment) ? 0 : (sec_hdr)->sh_size)
+
+/* Decide if the section SEC_HDR is in SEGMENT.  If CHECK_VMA, then
+   VMAs are checked for alloc sections.  If STRICT, then a zero size
+   section won't match at the end of a segment, unless the segment
+   is also zero size.  Regardless of STRICT and CHECK_VMA, zero size
+   sections won't match at the start or end of PT_DYNAMIC nor PT_NOTE,
+   unless PT_DYNAMIC and PT_NOTE are themselves zero sized.  */
+#define ELF_SECTION_IN_SEGMENT_1(sec_hdr, segment, check_vma, strict)	\
+  ((/* Only PT_LOAD, PT_GNU_RELRO and PT_TLS segments can contain	\
+       SHF_TLS sections.  */						\
+    ((((sec_hdr)->sh_flags & SHF_TLS) != 0)				\
+     && ((segment)->p_type == PT_TLS					\
+	 || (segment)->p_type == PT_GNU_RELRO				\
+	 || (segment)->p_type == PT_LOAD))				\
+    /* PT_TLS segment contains only SHF_TLS sections, PT_PHDR no	\
+       sections at all.  */						\
+    || (((sec_hdr)->sh_flags & SHF_TLS) == 0				\
+	&& (segment)->p_type != PT_TLS					\
+	&& (segment)->p_type != PT_PHDR))				\
+   /* PT_LOAD and similar segments only have SHF_ALLOC sections.  */	\
+   && !(((sec_hdr)->sh_flags & SHF_ALLOC) == 0				\
+	&& ((segment)->p_type == PT_LOAD				\
+	    || (segment)->p_type == PT_DYNAMIC				\
+	    || (segment)->p_type == PT_GNU_EH_FRAME			\
+	    || (segment)->p_type == PT_GNU_STACK			\
+	    || (segment)->p_type == PT_GNU_RELRO			\
+	    || (segment)->p_type == PT_GNU_SFRAME			\
+	    || ((segment)->p_type >= PT_GNU_MBIND_LO			\
+		&& (segment)->p_type <= PT_GNU_MBIND_HI)))		\
+   /* Any section besides one of type SHT_NOBITS must have file		\
+      offsets within the segment.  */					\
+   && ((sec_hdr)->sh_type == SHT_NOBITS					\
+       || ((bfd_vma) (sec_hdr)->sh_offset >= (segment)->p_offset	\
+	   && (!(strict)						\
+	       || ((sec_hdr)->sh_offset - (segment)->p_offset		\
+		   <= (segment)->p_filesz - 1))				\
+	   && (((sec_hdr)->sh_offset - (segment)->p_offset		\
+		+ ELF_SECTION_SIZE(sec_hdr, segment))			\
+	       <= (segment)->p_filesz)))				\
+   /* SHF_ALLOC sections must have VMAs within the segment.  */		\
+   && (!(check_vma)							\
+       || ((sec_hdr)->sh_flags & SHF_ALLOC) == 0			\
+       || ((sec_hdr)->sh_addr >= (segment)->p_vaddr			\
+	   && (!(strict)						\
+	       || ((sec_hdr)->sh_addr - (segment)->p_vaddr		\
+		   <= (segment)->p_memsz - 1))				\
+	   && (((sec_hdr)->sh_addr - (segment)->p_vaddr			\
+		+ ELF_SECTION_SIZE(sec_hdr, segment))			\
+	       <= (segment)->p_memsz)))					\
+   /* No zero size sections at start or end of PT_DYNAMIC nor		\
+      PT_NOTE.  */							\
+   && (((segment)->p_type != PT_DYNAMIC					\
+	&& (segment)->p_type != PT_NOTE)				\
+       || (sec_hdr)->sh_size != 0					\
+       || (segment)->p_memsz == 0					\
+       || (((sec_hdr)->sh_type == SHT_NOBITS				\
+	    || ((bfd_vma) (sec_hdr)->sh_offset > (segment)->p_offset	\
+	        && ((sec_hdr)->sh_offset - (segment)->p_offset		\
+		    < (segment)->p_filesz)))				\
+	   && (((sec_hdr)->sh_flags & SHF_ALLOC) == 0			\
+	       || ((sec_hdr)->sh_addr > (segment)->p_vaddr		\
+		   && ((sec_hdr)->sh_addr - (segment)->p_vaddr		\
+		       < (segment)->p_memsz))))))
+
+#define ELF_SECTION_IN_SEGMENT(sec_hdr, segment)			\
+  (ELF_SECTION_IN_SEGMENT_1 (sec_hdr, segment, 1, 0))
+
+#define ELF_SECTION_IN_SEGMENT_STRICT(sec_hdr, segment)			\
+  (ELF_SECTION_IN_SEGMENT_1 (sec_hdr, segment, 1, 1))
+
+#endif //ELF_INTERNAL_H

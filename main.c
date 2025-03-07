@@ -4,11 +4,11 @@
 
 int main() {
     char *elf_list[5] = {
-            "F:\\Code\\Clion\\ELF\\input\\libsfdata.so",
-            "F:\\Code\\Clion\\ELF\\input\\libDexHelper.so",
-            "F:\\Code\\Clion\\ELF\\input\\libDexHelper-x86.so",
-            "F:\\Code\\Clion\\ELF\\input\\memdumper32",
-            "F:\\Code\\Clion\\ELF\\input\\memdumper64"
+            "D:\\Code\\Clion\\ELF\\input\\libsfdata.so",
+            "D:\\Code\\Clion\\ELF\\input\\libDexHelper.so",
+            "D:\\Code\\Clion\\ELF\\input\\libDexHelper-x86.so",
+            "D:\\Code\\Clion\\ELF\\input\\memdumper32",
+            "D:\\Code\\Clion\\ELF\\input\\memdumper64"
     };
     const char *file_path = elf_list[3];
     FILE *file = fopen(file_path, "rb");

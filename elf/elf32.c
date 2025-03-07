@@ -5,6 +5,7 @@
 #include "elf32.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void parse_elf32_header(Elf32_Ehdr *ehdr, FILE *file) {
     fseek(file, 0, SEEK_SET);
@@ -171,7 +172,10 @@ void print_elf32_section_group(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[]) {
 
 void read_shstrtab(Elf32_Shdr *shstrtab, char *shstrtab_data, FILE *file) {
     fseek(file, shstrtab->sh_offset, SEEK_SET);
-    fread(shstrtab_data, 1, shstrtab->sh_size, file);
+    if (fread(shstrtab_data, 1, shstrtab->sh_size, file) != shstrtab->sh_size) {
+        perror("Failed to read shstrtab");
+        exit(-1);
+    }
 }
 
 // 打印 ELF 节头信息
@@ -225,24 +229,26 @@ void parse_program_flags(Elf32_Word flags, char *flag_str) {
     flag_str[3] = '\0';
 }
 
-
 void print_elf32_seg2sec_mapping(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Shdr shdrs[], FILE *file) {
-    // TODO: 打印结果与readelf不一致
     printf(" Section to Segment mapping:\n");
     printf("  Segment Sections...\n");
     Elf32_Shdr *shstrtab = &shdrs[ehdr->e_shstrndx];
     char shstrtab_data[shstrtab->sh_size / sizeof(char)];
     read_shstrtab(shstrtab, shstrtab_data, file);
+    Elf32_Phdr *segment = NULL;
+    Elf32_Shdr *section = NULL;
     for (int i = 0; i < ehdr->e_phnum; i++) {
-        printf("   %02d", i);
-        for (int j = 0; j < ehdr->e_shnum; j++) {
-            if (shdrs[j].sh_offset >= phdrs[i].p_offset &&
-                shdrs[j].sh_offset < phdrs[i].p_offset + phdrs[i].p_filesz) {
-                printf(" %s", &shstrtab_data[shdrs[j].sh_name]);
+        printf("   %02d     ", i);
+        segment = phdrs + i;
+        section = shdrs + 1;
+        for (int j = 1; j < ehdr->e_shnum; j++, section++) {
+            if (!ELF_TBSS_SPECIAL(section, segment) && ELF_SECTION_IN_SEGMENT_STRICT(section, segment)) {
+                printf("%s ", &shstrtab_data[section->sh_name]);
             }
         }
         printf("\n");
     }
+    printf("\n");
 }
 
 void print_elf32_program_headers(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], FILE *file) {
@@ -292,22 +298,229 @@ void parse_elf32_dynamic(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *file) {
     }
 }
 
+
+void get_elf32_dynamic_flag(Elf32_Word flag, char *res) {
+    res[0] = '\0'; // 清空结果字符串
+    int first = 1;
+    // DT_FLAGS
+    if (flag & DF_ORIGIN) {
+        strcat(res, "ORIGIN");
+        first = 0;
+    }
+    if (flag & DF_SYMBOLIC) {
+        strcat(res, first ? "SYMBOLIC" : " SYMBOLIC");
+        first = 0;
+    }
+    if (flag & DF_TEXTREL) {
+        strcat(res, first ? "TEXTREL" : " TEXTREL");
+        first = 0;
+    }
+    if (flag & DF_BIND_NOW) {
+        strcat(res, first ? "BIND_NOW" : " BIND_NOW");
+        first = 0;
+    }
+    if (flag & DF_STATIC_TLS) {
+        strcat(res, first ? "STATIC_TLS" : " STATIC_TLS");
+        first = 0;
+    }
+    if (first) { // 如果没有任何 flag 设置
+        strcat(res, "NONE");
+    }
+}
+
+void get_elf32_dynamic_flag1(Elf32_Word flag, char *res) {
+    res[0] = '\0'; // 清空结果字符串
+    int first = 1;
+
+    // DT_FLAGS_1
+    if (flag & DF_1_NOW) {
+        strcat(res, "NOW");
+        first = 0;
+    }
+    if (flag & DF_1_GLOBAL) {
+        strcat(res, first ? "GLOBAL" : " GLOBAL");
+        first = 0;
+    }
+    if (flag & DF_1_GROUP) {
+        strcat(res, first ? "GROUP" : " GROUP");
+        first = 0;
+    }
+    if (flag & DF_1_NODELETE) {
+        strcat(res, first ? "NODELETE" : " NODELETE");
+        first = 0;
+    }
+    if (flag & DF_1_LOADFLTR) {
+        strcat(res, first ? "LOADFLTR" : " LOADFLTR");
+        first = 0;
+    }
+    if (flag & DF_1_INITFIRST) {
+        strcat(res, first ? "INITFIRST" : " INITFIRST");
+        first = 0;
+    }
+    if (flag & DF_1_NOOPEN) {
+        strcat(res, first ? "NOOPEN" : " NOOPEN");
+        first = 0;
+    }
+    if (flag & DF_1_ORIGIN) {
+        strcat(res, first ? "ORIGIN" : " ORIGIN");
+        first = 0;
+    }
+    if (flag & DF_1_DIRECT) {
+        strcat(res, first ? "DIRECT" : " DIRECT");
+        first = 0;
+    }
+    if (flag & DF_1_TRANS) {
+        strcat(res, first ? "TRANS" : " TRANS");
+        first = 0;
+    }
+    if (flag & DF_1_INTERPOSE) {
+        strcat(res, first ? "INTERPOSE" : " INTERPOSE");
+        first = 0;
+    }
+    if (flag & DF_1_NODEFLIB) {
+        strcat(res, first ? "NODEFLIB" : " NODEFLIB");
+        first = 0;
+    }
+    if (flag & DF_1_NODUMP) {
+        strcat(res, first ? "NODUMP" : " NODUMP");
+        first = 0;
+    }
+    if (flag & DF_1_CONFALT) {
+        strcat(res, first ? "CONFALT" : " CONFALT");
+        first = 0;
+    }
+    if (flag & DF_1_ENDFILTEE) {
+        strcat(res, first ? "ENDFILTEE" : " ENDFILTEE");
+        first = 0;
+    }
+    if (flag & DF_1_DISPRELDNE) {
+        strcat(res, first ? "DISPRELDNE" : " DISPRELDNE");
+        first = 0;
+    }
+    if (flag & DF_1_DISPRELPND) {
+        strcat(res, first ? "DISPRELPND" : " DISPRELPND");
+        first = 0;
+    }
+    if (flag & DF_1_NODIRECT) {
+        strcat(res, first ? "NODIRECT" : " NODIRECT");
+        first = 0;
+    }
+    if (flag & DF_1_IGNMULDEF) {
+        strcat(res, first ? "IGNMULDEF" : " IGNMULDEF");
+        first = 0;
+    }
+    if (flag & DF_1_NOKSYMS) {
+        strcat(res, first ? "NOKSYMS" : " NOKSYMS");
+        first = 0;
+    }
+    if (flag & DF_1_NOHDR) {
+        strcat(res, first ? "NOHDR" : " NOHDR");
+        first = 0;
+    }
+    if (flag & DF_1_EDITED) {
+        strcat(res, first ? "EDITED" : " EDITED");
+        first = 0;
+    }
+    if (flag & DF_1_NORELOC) {
+        strcat(res, first ? "NORELOC" : " NORELOC");
+        first = 0;
+    }
+    if (flag & DF_1_SYMINTPOSE) {
+        strcat(res, first ? "SYMINTPOSE" : " SYMINTPOSE");
+        first = 0;
+    }
+    if (flag & DF_1_GLOBAUDIT) {
+        strcat(res, first ? "GLOBAUDIT" : " GLOBAUDIT");
+        first = 0;
+    }
+    if (flag & DF_1_SINGLETON) {
+        strcat(res, first ? "SINGLETON" : " SINGLETON");
+        first = 0;
+    }
+    if (flag & DF_1_PIE) {
+        strcat(res, first ? "PIE" : " PIE");
+        first = 0;
+    }
+
+    if (first) { // 如果没有任何 flag 设置
+        strcat(res, "NONE");
+    }
+}
+
 void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *file) {
     // **3. 遍历 Dynamic Section，解析重要的 Tag**
     printf("Dynamic section at offset 0x%x contains %d entries:\n", dyn_phdr->p_offset, (int)(dyn_phdr->p_filesz / sizeof(Elf32_Dyn)));
     printf("  Tag        Type                         Name/Value\n");
+    Elf32_Word strsz = 0;
+    Elf32_Addr strtab;
     for (Elf32_Dyn *dyn = dyns; dyn->d_tag != DT_NULL; dyn++) {
+        if (dyn->d_tag == DT_STRTAB) {
+            strtab = dyn->d_un.d_ptr;
+        }
+        if (dyn->d_tag == DT_STRSZ) {
+            strsz = dyn->d_un.d_val;
+        }
+    }
+    char dynamic_str[strsz / sizeof(char)];
+    if (strsz != 0) {
+        fseek(file, strtab, SEEK_SET);
+        if (fread(dynamic_str, strsz, 1, file) != 1) {
+            perror("Failed to read Dynamic STRTAB");
+            exit(-1);
+        }
+    }
+    for (int i = 0; i < dyn_phdr->p_filesz / sizeof(Elf32_Dyn); i++) {
+        Elf32_Dyn *dyn = dyns + i;
         printf(" 0x%08x ", dyn->d_tag);
-
         switch (dyn->d_tag) {
+            case DT_NULL:
+                printf("(NULL)                       0x%x\n", dyn->d_un.d_ptr);
+                break;
             case DT_NEEDED:
-                printf("(NEEDED)                     Shared library: []\n");
+                printf("(NEEDED)                     Shared library: [%s]\n", dynamic_str + dyn->d_un.d_val);
                 break;
-            case DT_FLAGS:
-                printf("(FLAGS)                      0x%x\n", dyn->d_un.d_val);
+            case DT_PLTRELSZ:
+                printf("(PLTRELSZ)                   %u (bytes)\n", dyn->d_un.d_val);
                 break;
-            case DT_FLAGS_1:
-                printf("(FLAGS_1)                    0x%x\n", dyn->d_un.d_val);
+            case DT_PLTGOT:
+                printf("(PLTGOT)                     0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_PLTREL: {
+                printf("(PLTREL)                     %s\n", dyn->d_un.d_val == DT_REL ? "REL" : "RELA");
+                break;
+            }
+            case DT_HASH:
+                printf("(HASH)                       0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_STRTAB:
+                printf("(STRTAB)                     0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_SYMTAB:
+                printf("(SYMTAB)                     0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_STRSZ:
+                printf("(STRSZ)                      %u (bytes)\n", dyn->d_un.d_val);
+                break;
+            case DT_SYMENT:
+                printf("(SYMENT)                     %u (bytes)\n", dyn->d_un.d_val);
+                break;
+            case DT_INIT:
+                printf("(INIT)                       0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_SONAME:
+                printf("(SONAME)                     0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_FINI:
+                printf("(FINI)                       0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_RELA:
+                printf("(RELA)                       0x%x\n", dyn->d_un.d_ptr);
+                break;
+            case DT_RELASZ:
+                printf("(RELASZ)                     %u (bytes)\n", dyn->d_un.d_val);
+                break;
+            case DT_RELAENT:
+                printf("(RELAENT)                    %u (bytes)\n", dyn->d_un.d_val);
                 break;
             case DT_REL:
                 printf("(REL)                        0x%x\n", dyn->d_un.d_ptr);
@@ -318,21 +531,27 @@ void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *f
             case DT_RELENT:
                 printf("(RELENT)                     %u (bytes)\n", dyn->d_un.d_val);
                 break;
-            case DT_PLTRELSZ:
-                printf("(PLTRELSZ)                   %u (bytes)\n", dyn->d_un.d_val);
+            case DT_RELCOUNT:
+                printf("(RELCOUNT)                   %u\n", dyn->d_un.d_val);
                 break;
-            case DT_PLTGOT:
-                printf("(PLTGOT)                     0x%x\n", dyn->d_un.d_ptr);
+            case DT_JMPREL:
+                printf("(JMPREL)                     0x%x\n", dyn->d_un.d_ptr);
                 break;
-            case DT_STRTAB:
-                printf("(STRTAB)                     0x%x\n", dyn->d_un.d_ptr);
+            case DT_DEBUG:
+                printf("(DEBUG)                      0x%x\n", dyn->d_un.d_ptr);
                 break;
-            case DT_SYMTAB:
-                printf("(SYMTAB)                     0x%x\n", dyn->d_un.d_ptr);
+            case DT_FLAGS: {
+                char res[100];
+                get_elf32_dynamic_flag(dyn->d_un.d_val, res);
+                printf("(FLAGS)                      %s\n", res);
                 break;
-            case DT_HASH:
-                printf("(HASH)                       0x%x\n", dyn->d_un.d_ptr);
+            }
+            case DT_FLAGS_1: {
+                char res[100];
+                get_elf32_dynamic_flag1(dyn->d_un.d_val, res);
+                printf("(FLAGS_1)                    Flags: %s\n", res);
                 break;
+            }
             case DT_INIT_ARRAY:
                 printf("(INIT_ARRAY)                 0x%x\n", dyn->d_un.d_ptr);
                 break;
@@ -348,8 +567,8 @@ void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *f
             case DT_VERNEEDNUM:
                 printf("(VERNEEDNUM)                 %u\n", dyn->d_un.d_val);
                 break;
-            case DT_DEBUG:
-                printf("(DEBUG)                      0x%x\n", dyn->d_un.d_ptr);
+            case DT_GNU_HASH:
+                printf("(GNU_HASH)                   0x%x\n", dyn->d_un.d_ptr);
                 break;
             default:
                 printf("(UNKNOWN)                    0x%x\n", dyn->d_un.d_val);

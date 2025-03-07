@@ -1,7 +1,7 @@
 #ifndef ELF_ELF_H
 #define ELF_ELF_H
 
-#include "elf_constants.h"
+#include "internal.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include "elf32.h"
