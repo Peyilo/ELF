@@ -39,6 +39,12 @@ int main() {
         Elf32_Dyn dyns[dyn_num];
         parse_elf32_dynamic(dyn_phdr, dyns, file);
         print_elf32_dynamic_segment(dyn_phdr, dyns, file);
+
+        Elf32_Shdr *reldyn_shdr = find_shdr_by_name(&ehdr, shdrs, ".rel.dyn", file);
+        Elf32_Rel rels[reldyn_shdr->sh_size / sizeof(Elf32_Rel)];
+        parse_elf32_rel(reldyn_shdr, rels, file);
+        print_elf32_reldyn_section(&ehdr, shdrs, reldyn_shdr, rels, file);
+
     }
     fclose(file);
     return EXIT_SUCCESS;

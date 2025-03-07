@@ -299,4 +299,49 @@ typedef uint32_t bfd_vma;
 #define ELF_SECTION_IN_SEGMENT_STRICT(sec_hdr, segment)			\
   (ELF_SECTION_IN_SEGMENT_1 (sec_hdr, segment, 1, 1))
 
+// Relocation section type
+#define R_ARM_NONE              0   // Static Misc
+#define R_ARM_PC24              1   // Deprecated ARM ((S + A) | T) - P
+#define R_ARM_ABS32             2   // Static Data (S + A) | T
+#define R_ARM_REL32             3   // Static Data ((S + A) | T) - P
+#define R_ARM_LDR_PC_G0         4   // Static ARM S + A - P
+#define R_ARM_ABS16             5   // Static Data S + A
+#define R_ARM_ABS12             6   // Static ARM S + A
+#define R_ARM_THM_ABS5          7   // Static Thumb16 S + A
+#define R_ARM_ABS8              8   // Static Data S + A
+#define R_ARM_SBREL32           9   // Static Data ((S + A) | T) - B(S)
+#define R_ARM_THM_CALL         10   // Static Thumb32 ((S + A) | T) - P
+#define R_ARM_THM_PC8          11   // Static Thumb16
+#define R_ARM_BREL_ADJ         12   // Dynamic Data DeltaB(S) + A
+#define R_ARM_TLS_DESC         13   // Dynamic Data
+#define R_ARM_THM_SWI8         14   // Obsolete
+#define R_ARM_XPC25            15   // Obsolete
+#define R_ARM_THM_XPC22        16   // Obsolete
+#define R_ARM_TLS_DTPMOD32     17   // Dynamic Data Module(S)
+#define R_ARM_TLS_DTPOFF32     18   // Dynamic Data S + A - TLS
+#define R_ARM_TLS_TPOFF32      19   // Dynamic Data S + A - tp
+#define R_ARM_COPY             20   // Dynamic Misc
+#define R_ARM_GLOB_DAT         21   // Dynamic Data (S + A) | T
+#define R_ARM_JUMP_SLOT        22   // Dynamic Data (S + A) | T
+#define R_ARM_RELATIVE         23   // Dynamic Data B(S) + A
+#define R_ARM_GOTOFF32         24   // Static Data (((S + A) | T) - GOT_ORG)
+#define R_ARM_BASE_PREL        25   // Static Data B(S) + A - P
+#define R_ARM_GOT_BREL         26   // Static Data GOT(S) + A - GOT_ORG
+#define R_ARM_PLT32            27   // Deprecated ARM ((S + A) | T) - P
+#define R_ARM_CALL             28   // Static ARM ((S + A) | T) - P
+#define R_ARM_JUMP24           29   // Static ARM ((S + A) | T) - P
+#define R_ARM_THM_JUMP24       30   // Static Thumb32 ((S + A) | T) - P
+#define R_ARM_BASE_ABS         31   // Static Data B(S) + A
+#define R_ARM_ALU_PCREL_7_0    32   // Obsolete
+#define R_ARM_ALU_PCREL_15_8   33   // Obsolete
+#define R_ARM_ALU_PCREL_23_15  34   // Obsolete
+#define R_ARM_LDR_SBREL_11_0_NC 35 // Deprecated ARM S + A - B(S)
+#define R_ARM_ALU_SBREL_19_12_NC 36 // Deprecated ARM S + A - B(S)
+#define R_ARM_ALU_SBREL_27_20_CK 37 // Deprecated ARM S + A - B(S)
+#define R_ARM_TARGET1           38   // Data Misc (S + A) | T
+
+#define ELF32_R_SYM(info)   ((info) >> 8)
+#define ELF32_R_TYPE(info)   ((info) & 0xff)
+
+
 #endif //ELF_INTERNAL_H

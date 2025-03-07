@@ -278,15 +278,38 @@ void print_elf32_program_headers(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], FILE *fil
 }
 
 
-Elf32_Phdr *get_dynamic_phdr(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[]) {
+Elf32_Phdr *find_phdr_by_type(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Word p_type) {
     for (int i = 0; i < ehdr->e_phnum; i++) {
         Elf32_Phdr *phdr = phdrs + i;
-        if (phdr->p_type == PT_DYNAMIC) {
+        if (phdr->p_type == p_type) {
             return phdr;
         }
     }
-    perror("Did't find the DYNAMIC segment.");
-    exit(-1);
+    return NULL;
+}
+
+Elf32_Phdr *get_dynamic_phdr(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[]) {
+    Elf32_Phdr *phdr = find_phdr_by_type(ehdr, phdrs, PT_DYNAMIC);
+    if (phdr == NULL) {
+        perror("Did't find the DYNAMIC segment.");
+        exit(-1);
+    }
+    return phdr;
+}
+
+
+Elf32_Shdr *find_shdr_by_name(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], const char *name, FILE *file) {
+    Elf32_Shdr *shstrtab = &shdrs[ehdr->e_shstrndx];
+    // 读取 `.shstrtab` 数据
+    char shstrtab_data[shstrtab->sh_size / sizeof(char)];
+    read_shstrtab(shstrtab, shstrtab_data, file);
+    for (int i = 0; i < ehdr->e_shnum; i++) {
+        char *shdr_name = &shstrtab_data[(shdrs + i)->sh_name];
+        if (strcmp(shdr_name, name) == 0) {
+            return shdrs + i;
+        }
+    }
+    return NULL;
 }
 
 
@@ -575,5 +598,107 @@ void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *f
                 break;
         }
     }
+    printf("\n");
+}
 
+
+void parse_elf32_rel(Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file) {
+    if (rel_shdr->sh_type != SHT_REL) {
+        perror("The type of the rel_shdr must to be SHT_REL!");
+        exit(-1);
+    }
+    fseek(file, (long )rel_shdr->sh_offset, SEEK_SET);
+    if (fread(rels, rel_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read rel section");
+        exit(-1);
+    }
+}
+
+// 打印符号表信息（符号索引与符号名称）
+void print_symbol_info(Elf32_Sym *symtab, unsigned int symbol_index, FILE *file) {
+    // 假设你有符号表的指针 `symtab` 和 ELF 文件 `file`
+    if (!symtab) return;
+
+    // 获取符号名称，假设符号名在符号字符串表中
+    fseek(file, symtab[symbol_index].st_name, SEEK_SET);
+    char symbol_name[256];
+    fread(symbol_name, sizeof(char), sizeof(symbol_name) - 1, file);
+    symbol_name[255] = '\0'; // 确保符号名称是字符串
+
+    printf("  Symbol Index: %u\n", symbol_index);
+    printf("  Symbol Name: %s\n", symbol_name);
+}
+
+char *get_relocation_type(unsigned int relocation_type) {
+    switch (relocation_type) {
+        case R_ARM_NONE:              return "ARM_NONE";
+        case R_ARM_PC24:              return "R_ARM_PC24";
+        case R_ARM_ABS32:             return "R_ARM_ABS32";
+        case R_ARM_REL32:             return "R_ARM_REL32";
+        case R_ARM_LDR_PC_G0:         return "R_ARM_LDR_PC_G0";
+        case R_ARM_ABS16:             return "R_ARM_ABS16";
+        case R_ARM_ABS12:             return "R_ARM_ABS12";
+        case R_ARM_THM_ABS5:          return "R_ARM_THM_ABS5";
+        case R_ARM_ABS8:              return "R_ARM_ABS8";
+        case R_ARM_SBREL32:           return "R_ARM_SBREL32";
+        case R_ARM_THM_CALL:          return "R_ARM_THM_CALL";
+        case R_ARM_THM_PC8:           return "R_ARM_THM_PC8";
+        case R_ARM_BREL_ADJ:          return "R_ARM_BREL_ADJ";
+        case R_ARM_TLS_DESC:          return "R_ARM_TLS_DESC";
+        case R_ARM_THM_SWI8:          return "R_ARM_THM_SWI8";
+        case R_ARM_XPC25:             return "R_ARM_XPC25";
+        case R_ARM_THM_XPC22:         return "R_ARM_THM_XPC22";
+        case R_ARM_TLS_DTPMOD32:      return "R_ARM_TLS_DTPMOD32";
+        case R_ARM_TLS_DTPOFF32:      return "R_ARM_TLS_DTPOFF32";
+        case R_ARM_TLS_TPOFF32:       return "R_ARM_TLS_TPOFF32";
+        case R_ARM_COPY:              return "R_ARM_COPY";
+        case R_ARM_GLOB_DAT:          return "R_ARM_GLOB_DAT";
+        case R_ARM_JUMP_SLOT:         return "R_ARM_JUMP_SLOT";
+        case R_ARM_RELATIVE:          return "R_ARM_RELATIVE";
+        case R_ARM_GOTOFF32:          return "R_ARM_GOTOFF32";
+        case R_ARM_BASE_PREL:         return "R_ARM_BASE_PREL";
+        case R_ARM_GOT_BREL:          return "R_ARM_GOT_BREL";
+        case R_ARM_PLT32:             return "R_ARM_PLT32";
+        case R_ARM_CALL:              return "R_ARM_CALL";
+        case R_ARM_JUMP24:            return "R_ARM_JUMP24";
+        case R_ARM_THM_JUMP24:        return "R_ARM_THM_JUMP24";
+        case R_ARM_BASE_ABS:          return "R_ARM_BASE_ABS";
+        case R_ARM_ALU_PCREL_7_0:     return "R_ARM_ALU_PCREL_7_0";
+        case R_ARM_ALU_PCREL_15_8:    return "R_ARM_ALU_PCREL_15_8";
+        case R_ARM_ALU_PCREL_23_15:   return "R_ARM_ALU_PCREL_23_15";
+        case R_ARM_LDR_SBREL_11_0_NC: return "R_ARM_LDR_SBREL_11_0_NC";
+        case R_ARM_ALU_SBREL_19_12_NC: return "R_ARM_ALU_SBREL_19_12_NC";
+        case R_ARM_ALU_SBREL_27_20_CK: return "R_ARM_ALU_SBREL_27_20_CK";
+        case R_ARM_TARGET1:           return "R_ARM_TARGET1";
+
+        default:                      return "Unknown";
+    }
+}
+
+
+void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file) {
+    size_t size = rel_shdr->sh_size / sizeof(Elf32_Rel);
+    printf("Relocation section '.rel.dyn' at offset 0x%x contains %zu entries:\n", rel_shdr->sh_offset, size);
+    printf(" Offset     Info    Type            Sym.Value  Sym. Name\n");
+
+    // TODO: Sym信息有问题
+    Elf32_Shdr *dynstr_shdr = find_shdr_by_name(ehdr, shdrs, ".dynstr", file);
+    char strtab[dynstr_shdr->sh_size / sizeof(char )];
+    fseek(file, (long )dynstr_shdr->sh_offset, SEEK_SET);
+    if (fread(strtab, dynstr_shdr->sh_size, 1, file) != 1) {
+        perror("Failed to read .dynstr section");
+        exit(-1);
+    }
+
+    // 遍历每个重定位条目
+    for (size_t i = 0; i < size; ++i) {
+        Elf32_Rel *rel_entry = &rels[i];
+
+        // 获取符号索引和重定位类型
+        unsigned int symbol_index = ELF32_R_SYM(rel_entry->r_info);
+        unsigned int relocation_type = ELF32_R_TYPE(rel_entry->r_info);
+
+        printf("%08x  %08x %s %s\n", rel_entry->r_offset, rel_entry->r_info, get_relocation_type(relocation_type), strtab + symbol_index);
+
+    }
 }

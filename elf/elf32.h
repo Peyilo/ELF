@@ -59,6 +59,7 @@ typedef struct {
     Elf32_Word p_align;
 } Elf32_Phdr;
 
+// define the Dynamic section entry
 typedef struct {
     Elf32_Sword d_tag;
     union {
@@ -67,17 +68,46 @@ typedef struct {
     } d_un;
 } Elf32_Dyn;
 
+// define the Symbol table entry
+typedef struct {
+    Elf32_Word      st_name;
+    Elf32_Addr      st_value;
+    Elf32_Word      st_size;
+    unsigned char   st_info;
+    unsigned char   st_other;
+    Elf32_Half      st_shndx;
+} Elf32_Sym;
+
+// Define the relocation entry
+typedef struct {
+    Elf32_Addr      r_offset;
+    Elf32_Word      r_info;
+} Elf32_Rel;
+
+typedef struct {
+    Elf32_Addr      r_offset;
+    Elf32_Word      r_info;
+    Elf32_Sword     r_addend;
+} Elf32_Rela;
+
+
 void parse_elf32_header(Elf32_Ehdr *ehdr, FILE *file);
 void parse_elf32_section_header(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file);
 void parse_elf32_program_header(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], FILE *file);
 void parse_elf32_dynamic(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *file);
+void parse_elf32_rel(Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file);
 
 void print_elf32_header(Elf32_Ehdr *header);
 void print_elf32_section_headers(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], FILE *file);
 void print_elf32_program_headers(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], FILE *file);
 void print_elf32_seg2sec_mapping(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Shdr shdrs[], FILE *file);
 void print_elf32_dynamic_segment(Elf32_Phdr *dyn_phdr, Elf32_Dyn dyns[], FILE *file);
+void print_elf32_reldyn_section(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], Elf32_Shdr *rel_shdr, Elf32_Rel rels[], FILE *file);
+
+Elf32_Shdr *find_shdr_by_name(Elf32_Ehdr *ehdr, Elf32_Shdr shdrs[], const char *name, FILE *file);
+Elf32_Phdr *find_phdr_by_type(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[], Elf32_Word p_type);
 
 Elf32_Phdr *get_dynamic_phdr(Elf32_Ehdr *ehdr, Elf32_Phdr phdrs[]);
+
 
 #endif //ELF_ELF32_H
